@@ -3,6 +3,24 @@
 #include <chrono>
 using namespace std;
 
+//kernals
+double kernal_x[3][3] = {
+	{-1, 0, 1},
+	{-2, 0, 2},
+	{-1, 0, 1},
+};
+double kernal_y[3][3] = {
+	{-1, -2, -1},
+	{0, 0, 0},
+	{1, 2, 1},
+};
+
+//struct for passing vector of x and y positions
+struct Edge {
+	vector<int> x;
+	vector<int> y;
+};
+
 // you can use that
 struct Orbit {
 	// logged position and time
@@ -13,6 +31,10 @@ struct Orbit {
 	int x_sunrise,y_sunrise;
 	double omega = 0.1;
 } orbit;
+
+bool is_red(int row, int col){
+	return (int)get_pixel(image, row, col,0) > ((int)get_pixel(image, row, col,1) + (int)get_pixel(image, row, col,2));
+}
 
 //stores the x, y position and time of the sun
 void store_sun_position(int t){
@@ -54,6 +76,38 @@ double det(double matrix[3][3]){
 	double i = matrix[2][2];
 
 	return (a*((e*i)-(f*h))) - (b*((d*i)-(f*g))) + (c*((d*h)-(e*g)));
+}
+
+Edge filter_edge(){
+	Edge edge;
+	for (int col = 1; col < image.width-1; col++){
+		for (int row = 1; row < image.height-1; row++){
+			if (is_red(row, col)){
+				double rx = 0;
+				double ry = 0;
+
+				for(int yk = -1; yk <= 1; yk++){
+					for(int xk = -1; xk <= 1; xk++){
+						rx += (int)get_pixel(image, row+yk, col+xk, 0) * kernal_x[yk+1][xk+1];
+						ry += (int)get_pixel(image, row+yk, col+xk, 0) * kernal_y[yk+1][xk+1];
+					}
+				}
+
+				double r_final = sqrt((rx*rx) + (ry*ry));
+
+				if(r_final > 200){
+					//cout<<"r_final: "<<r_final<<endl;
+					set_pixel(image, row, col, 255, 255, 255);
+					edge.x.push_back(col);
+					edge.y.push_back(row);
+				} else {
+					set_pixel(image, row, col, (int)get_pixel(image, row, col,0), (int)get_pixel(image, row, col,1), (int)get_pixel(image, row, col,2));
+				}
+			}
+		}
+	}
+	save_bmp_file("test.bmp", image);
+	return edge;
 }
 
 //calculates the orbit of the sun
@@ -139,7 +193,7 @@ bool sun_visiable(){
 	int red = 0;
 	for (int row = 0; row < image.height; row ++){
 		for (int col = 0; col < image.width; col ++){
-			if ((int)get_pixel(image, row,col,0) > ((int)get_pixel(image, row,col,2) + (int)get_pixel(image, row,col,2))){
+			if (is_red(row, col)){
 				red++;
 			}
 		}
@@ -169,7 +223,7 @@ void store_orbit_position(int t){
 
 	for (int row = 0; row < image.height; row ++){
 		for (int col = 0; col < image.width; col ++){
-			if ((int)get_pixel(image, row,col,0) > ((int)get_pixel(image, row,col,2) + (int)get_pixel(image, row,col,2))){
+			if (is_red(row, col)){
 				x.push_back(col);
 				y.push_back(row);
 			}
@@ -185,11 +239,11 @@ void store_orbit_position(int t){
 
 int main(){        
 	cout<<"start..."<<endl;
-	init(3);
+	init(2);
 	//int x_sun, y_sun; // current position of the sun
     for ( int time = 0 ; time < 950; time++){
 		cout<<endl;
-		
+		filter_edge();
 		if(time < 41) 		{store_orbit_position(time);}
 		else if(time == 41) {calculate_orbit();}
 		else  				{store_sun_position(time);}

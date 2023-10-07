@@ -348,4 +348,3 @@ void init(int level){
         draw_all(level);
     } else {std::cout<<" Fail to reserve image memory"<<std::endl;}
 }
-
