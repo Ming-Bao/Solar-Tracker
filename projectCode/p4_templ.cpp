@@ -10,9 +10,9 @@ double kernal_x[3][3] = {
 	{-1, 0, 1},
 };
 double kernal_y[3][3] = {
-	{-1, -2, -1},
-	{0, 0, 0},
 	{1, 2, 1},
+	{0, 0, 0},
+	{-1, -2, -1},
 };
 
 //struct for passing vector of x and y positions
@@ -32,30 +32,52 @@ struct Orbit {
 	double omega = 0.1;
 } orbit;
 
+//returns if the position contains a red pixel
 bool is_red(int row, int col){
-	return (int)get_pixel(image, row, col,0) > ((int)get_pixel(image, row, col,1) + (int)get_pixel(image, row, col,2));
+	return (int)get_pixel(image, row, col,0) > (int)get_pixel(image, row, col,1)*1.5 &&
+		   (int)get_pixel(image, row, col,0) > (int)get_pixel(image, row, col,2)*1.5;
+}
+
+//filters the x and y positions of any red edges and returns them in an Edge struct
+Edge filter_edge(){
+	Edge edge;
+	ImagePPM image1;
+	image1.width = 900;
+	image1.height = 900;
+    image1.n_bytes =  image1.width*image1.height*3;
+    image1.data = new char[image1.n_bytes];
+	
+	for (int col = 1; col < image.width-1; col++){
+		for (int row = 1; row < image.height-1; row++){
+			//set_pixel(image1, row, col, (int)get_pixel(image, row, col,0), (int)get_pixel(image, row, col,1), (int)get_pixel(image, row, col,2));
+			if (is_red(row, col)){
+				double rx = 0;
+				double ry = 0;
+
+				for(int yk = -1; yk <= 1; yk++){
+					for(int xk = -1; xk <= 1; xk++){
+						rx += (int)get_pixel(image, row+yk, col+xk, 0) * kernal_x[yk+1][xk+1];
+						ry += (int)get_pixel(image, row+yk, col+xk, 0) * kernal_y[yk+1][xk+1];
+					}
+				}
+				
+				double r_final = sqrt((rx*rx) + (ry*ry));
+
+				if(r_final > 75){
+					//cout<<"r_final: "<<r_final<<endl;
+					set_pixel(image1, row, col, 0, 255, 0);
+					edge.x.push_back(col);
+					edge.y.push_back(row);
+				}
+			}
+		}
+	}
+	save_bmp_file("test.bmp", image1);
+	return edge;
 }
 
 //stores the x, y position and time of the sun
-void store_sun_position(int t){
-	// vector<int> x;
-	// vector<int> y;
-
-	// for (int row = 0; row < image.height; row ++){
-	// 	for (int col = 0; col < image.width; col ++){
-	// 		if ((int)get_pixel(image, row,col,0) > ((int)get_pixel(image, row,col,2) + (int)get_pixel(image, row,col,2))){
-	// 			x.push_back(col);
-	// 			y.push_back(row);
-	// 		}
-	// 	}
-	// }
-
-	// if(x.size() != 0 && y.size() != 0 && t <= 41){
-	// 	orbit.t.push_back(t);
-	// 	orbit.x.push_back(x.at((int)x.size()/2));
-	//  	orbit.y.push_back(y.at((int)y.size()/2));	
-	// }
-
+void get_sun_position_with_formula(int t){
 	orbit.x.push_back(orbit.xc + orbit.r*cos(orbit.omega*t));
 	orbit.y.push_back(orbit.yc + orbit.r*sin(orbit.omega*t));
 	orbit.t.push_back(t);
@@ -78,41 +100,9 @@ double det(double matrix[3][3]){
 	return (a*((e*i)-(f*h))) - (b*((d*i)-(f*g))) + (c*((d*h)-(e*g)));
 }
 
-Edge filter_edge(){
-	Edge edge;
-	for (int col = 1; col < image.width-1; col++){
-		for (int row = 1; row < image.height-1; row++){
-			if (is_red(row, col)){
-				double rx = 0;
-				double ry = 0;
-
-				for(int yk = -1; yk <= 1; yk++){
-					for(int xk = -1; xk <= 1; xk++){
-						rx += (int)get_pixel(image, row+yk, col+xk, 0) * kernal_x[yk+1][xk+1];
-						ry += (int)get_pixel(image, row+yk, col+xk, 0) * kernal_y[yk+1][xk+1];
-					}
-				}
-
-				double r_final = sqrt((rx*rx) + (ry*ry));
-
-				if(r_final > 200){
-					//cout<<"r_final: "<<r_final<<endl;
-					set_pixel(image, row, col, 255, 255, 255);
-					edge.x.push_back(col);
-					edge.y.push_back(row);
-				} else {
-					set_pixel(image, row, col, (int)get_pixel(image, row, col,0), (int)get_pixel(image, row, col,1), (int)get_pixel(image, row, col,2));
-				}
-			}
-		}
-	}
-	save_bmp_file("test.bmp", image);
-	return edge;
-}
-
 //calculates the orbit of the sun
 void calculate_orbit(){
-	double a11, a12, a13, a21, a22, a23, a31, a32, a33, b1, b2, b3, b3_1, b3_2;
+	double a11=0, a12=0, a13=0, a21=0, a22=0, a23=0, a31=0, a32=0, a33=0, b1=0, b2=0, b3=0, b3_1=0, b3_2=0;
 	int n = orbit.x.size();
 	double omega = 0.1;
 
@@ -246,9 +236,11 @@ int main(){
 		filter_edge();
 		if(time < 41) 		{store_orbit_position(time);}
 		else if(time == 41) {calculate_orbit();}
-		else  				{store_sun_position(time);}
+		else{
+			go_to_sun();
+			get_sun_position_with_formula(time);
+		}
 
-		go_to_sun();
 
       	draw_all(time);  // image is ready, 
       	cout<<" time="<<time<<endl;
